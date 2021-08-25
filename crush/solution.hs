@@ -1,6 +1,6 @@
 -- https://www.hackerrank.com/challenges/crush/
 -- Start: 24/08/2021
-module Solution where
+module Main where
 
 import Data.Maybe (fromMaybe)
 import Data.Function (on)
@@ -9,72 +9,75 @@ import qualified Data.Map.Strict as Map
 
 type Query = [Int]
 
-type Tally = Map.Map (Int, Int) Int
+type Tally = Map.Map Int (Int, Int)
 
-(.-) :: (c->d) -> (a->b->c) -> a -> b -> d
-(.-) f1 f2 x y = f1 (f2 x y)
-
-merge :: Tally -> Tally -> Tally
-merge = (go `on` Map.toAscList)
+merge :: Tally -> Query -> Tally
+merge m q = if Map.null m
+    then
+        Map.singleton a0 (b0, x0)
+    else
+        Map.fromList $ go [a0,b0,x0] $ Map.toAscList m
     where
-        go [] m = Map.fromList m
-        go m [] = Map.fromList m
-        go (h1:t1) (h2:t2) = (Map.fromList $ goHead h1 h2) `Map.union` (go t1 t2)
-        goHead q1@((a,b),x) q2@((c,d),y) = if a < c
-            then 
-                if b < c
-                    then
-                        [q1, q2]
-                    else if b < d
+        [a0, b0, x0] = take 3 q 
+        go [a,b,x] [] = (a,(b,x)) : []
+        go [a,b,x] l@( (c,(d,y)) : t) =
+            if a < c
+                then
+                    if b < c
                         then
-                            [((a,c-1),x), ((c,b),x+y), ((b+1,d),y)]
-                        else if b == d
-                            then
-                                [((a,c-1),x), ((c,d),x+y)]
-                            else -- d < b
-                                [((a,c-1),x), ((c,d),x+y), ((d+1,b),x)]
-            else if a == c
-                then if b < d
-                    then
-                        [((a,b),x+y), ((b+1,d),y)]
-                    else if b == d
+                            --  a     b
+                            --  |-----|
+                            --           |------|
+                            --           c      d
+                            (a,(b,x)) : l
+                        else -- a < c  && b >= c
+
+                            --  a      b
+                            --  |------| 
+                            --     |---------|
+                            --     c         d
+                            -- Result: Add (a,c-1,x); Merge (c,b,x)
+                            (a,(c-1,x)) : (go [c,b,x] l)
+                else
+                    if a == c
                         then
-                            [((a,b),x+y)]
-                        else -- d < b
-                            [((a,d),x+y), ((d+1,b),x)]
-                else -- c < a
-                    if d < a
-                        then
-                            [q1, q2]
-                        else if b < d
-                            then
-                                [((c,a-1),y), ((a,b),x+y), ((b+1,d),y)]
-                            else if b == d
+                            if b == d
                                 then
-                                    [((c,a-1),y), ((a,b),x+y)]
-                                else -- d < b
-                                    [((c,a-1),y), ((a,d),x+y), ((d+1,b),x)]
+                                    (a,(b,x+y)) : t
+                                else
+                                    if b <  d
+                                        then
+                                            (a,(b,x+y)): (b+1,(d,y)): t
+                                        else -- d < b && a == c
+                                            --  a        b
+                                            --  |--------|
+                                            --  |----|
+                                            --  c    d
+                                            (c,(d,x+y)) : (go [d+1,b,x] t)
+                        else -- a > c
+                            if a > d
+                                then
+                                    --            a     b
+                                    --            |-----|
+                                    --  c      d
+                                    --  |------|
+                                    (c,(d,y)) : go [a,b,x] t
+                                else -- a > c && a <= d
+                                            (c,(a-1,y)) : (a,(d,x+y)) : (go [d+1,b,x] t)
+                                        --      a       b               a    b
+                                        --      |-------|    OR         |----|
+                                        --  |--------|             |----|
+                                        --  c        d             c    d
 
 ensure :: (a->Bool) -> a -> Maybe a
 ensure p v = if p v then Just v else Nothing
 
-findMaxValue :: Ord b => Map.Map a b -> Maybe b
-findMaxValue = (maximum <$>) . (ensure (not . null)) . Map.elems
-
--- findMaxValuePairs :: Ord b => Map.Map a b -> [(a,b)]
--- findMaxValuePairs m = maybe []  go maxv 
---     where
---         (<#>) = (,)
---         go v = (<#> v) <$> (filterkeys v)
---         filterkeys v = Map.keys $ Map.filter (==v) m
---         maxv = findMaxValue m
-
 crush :: [Query] -> Int
-crush qs = fromMaybe 0 maxv
+crush qs = fromMaybe 0 $ maxtally
     where
-        maxv = findMaxValue m
-        m = foldl merge Map.empty (singletonQuery <$> qs)
-        singletonQuery [a,b,k] = Map.singleton (a,b) k
+        maxtally = fmap maximum $ ensure (not.null) $ values
+        values = (snd . snd) <$> (Map.toList m)
+        m = foldl merge Map.empty qs
 
 main :: IO ()
 main = do
